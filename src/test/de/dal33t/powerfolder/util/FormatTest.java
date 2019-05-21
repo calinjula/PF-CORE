@@ -7,9 +7,7 @@ import org.junit.Test;
 import java.text.NumberFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.Calendar;
-import java.util.Date;
-import java.util.Locale;
+import java.util.*;
 
 import static org.junit.Assert.*;
 
@@ -367,28 +365,17 @@ public class FormatTest {
         }
     }
 
-    @Test(expected = ParseException.class)
-    public void parseDateCanonicalExceptionTest() throws ParseException {
-
-        String stringToParse = "This is a test string";
-        Format.parseDateCanonical(stringToParse);
-
-    }
-
-    @Test(expected = ParseException.class)
-    public void parseDateCanonicalFormatTest() throws ParseException {
-
-        String stringToParse = "28 03 2019";
-        Format.parseDateCanonical(stringToParse);
-
-    }
-
-    @Test(expected = ParseException.class)
-    public void parseDateCanonicalFormatTwoTest() throws ParseException {
-
-        int stringToParse = 53;
-        Format.parseDateCanonical(String.valueOf(stringToParse));
-
+    @Test
+    public void parseDateCannonicalDifferentInputs() {
+        List<String> strings = Arrays.asList("!@#$%^^&*()", "{}:,./;", "±!~", "Testing", "", "28 03 2019", "123-12345-1234", "123");
+        for (String string : strings) {
+            try {
+                Format.parseDateCanonical(string);
+                fail("Exception not thrown when it should");
+            } catch (ParseException e) {
+                //It's supposed to throw this exception
+            }
+        }
     }
 
     @Test(expected = NullPointerException.class)
