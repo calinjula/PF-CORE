@@ -1,5 +1,7 @@
 package de.dal33t.powerfolder.util;
 
+import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
 
 import java.text.NumberFormat;
@@ -7,10 +9,23 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.Locale;
 
 import static org.junit.Assert.*;
 
 public class FormatTest {
+
+    Locale defaultLocale = Locale.getDefault();
+
+    @Before
+    public void setUp(){
+        Locale.setDefault(Locale.US);
+    }
+
+    @After
+    public void tearDown(){
+        Locale.setDefault(defaultLocale);
+    }
 
     @Test
     public void formatBytesReturnBytesTest() {
@@ -389,4 +404,5 @@ public class FormatTest {
         assertEquals(Translation.get("format.one_minute"), Format.formatDeltaTime(oneMinute));
 
     }
+
 }
