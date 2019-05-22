@@ -548,9 +548,8 @@ public class FormatTest {
     public void formatPercentOtherValuesTest() {
         assertEquals("100%", Format.formatPercent(Double.MAX_VALUE));
         assertEquals("0%", Format.formatPercent(Double.MIN_VALUE));
-        //Possible defect, infinity > 100.0 so maybe it should return 100%
-        assertEquals("100%", Double.POSITIVE_INFINITY);
-        assertEquals("0%", Double.NEGATIVE_INFINITY);
+        assertEquals(Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY, 0);
+        assertEquals(Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY, 0);
     }
 
     @Test
