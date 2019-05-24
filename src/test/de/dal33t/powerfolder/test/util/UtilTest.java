@@ -21,16 +21,15 @@ package de.dal33t.powerfolder.test.util;
 
 import de.dal33t.powerfolder.Constants;
 import de.dal33t.powerfolder.Controller;
+import de.dal33t.powerfolder.Feature;
 import de.dal33t.powerfolder.Member;
 import de.dal33t.powerfolder.light.MemberInfo;
+import de.dal33t.powerfolder.net.ConnectionException;
 import de.dal33t.powerfolder.util.IdGenerator;
 import de.dal33t.powerfolder.util.Util;
 import junit.framework.TestCase;
 import org.apache.commons.io.FileUtils;
-import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
-import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClientBuilder;
 import org.jetbrains.annotations.NotNull;
 
 import java.awt.*;
@@ -263,10 +262,8 @@ public class UtilTest extends TestCase {
         assertFalse(Util.isValidEmail("@test.com"));
         assertFalse(Util.isValidEmail(".de"));
 
-
-        //Possible defect since Test@Test is not a valid email address
-        //assertFalse(Util.isValidEmail("Test@Test"));
-        //assertFalse(Util.isValidEmail("tes\"t@test'.com"));
+        assertFalse(Util.isValidEmail("Test@Test"));
+        assertFalse(Util.isValidEmail("tes\"t@test'.com"));
 
     }
 
@@ -279,6 +276,7 @@ public class UtilTest extends TestCase {
     }
 
     public void testUseSwarmingNullController() {
+
         Controller controller = null;
 
         Controller controllerNotNull = new Controller();
@@ -291,6 +289,7 @@ public class UtilTest extends TestCase {
         } catch (NullPointerException e){
             //Ok, supposed to throw since controller is null
         }
+        controllerNotNull.shutdown();
     }
 
     public void testUseSwarmingNullMember() {
@@ -310,8 +309,46 @@ public class UtilTest extends TestCase {
         MemberInfo memberInfo = new MemberInfo("One",null,"Three");
         Member member = new Member(controllerNotNull, memberInfo);
         assertEquals(false, Util.useSwarming(controllerNotNull, member));
+        controllerNotNull.shutdown();
     }
 
+    public void testUseSwarming() throws ConnectionException, IOException {
+
+        File file = new File("build/test/first.config");
+        file.createNewFile();
+        FileWriter writer = new FileWriter(file);
+        writer.write("\n" +
+                "net.bindaddress=127.0.0.1\n" +
+                "random-port=false\n" +
+                "net.port=3457\n" +
+                "net.broadcast=false");
+
+        writer.close();
+
+        File newFile = new File("build/test/second.config");
+        newFile.createNewFile();
+        FileWriter newWriter = new FileWriter(newFile);
+        newWriter.write("net.bindaddress=127.0.0.1");
+
+        newWriter.close();
+
+        Feature.P2P_REQUIRES_LOGIN_AT_SERVER.disable();
+
+        Controller firstController = new Controller();
+        Controller secondController = new Controller();
+        firstController.startConfig("build/test/first.config");
+        secondController.startConfig("build/test/second.config");
+
+        firstController.connect(secondController.getConnectionListener().getAddress());
+        Member member = firstController.getNodeManager().getConnectedNodes().iterator().next();
+        assertTrue(Util.useSwarming(firstController, member));
+
+        firstController.shutdown();
+        secondController.shutdown();
+
+        FileUtils.forceDelete(file);
+        FileUtils.forceDelete(newFile);
+    }
 
     public void testGetResourceUnableToFind() {
         assertNull(Util.getResource("asdasd","asdasd"));
@@ -608,6 +645,14 @@ public class UtilTest extends TestCase {
 
     }
 
+    public void testCompareIpSmaller(){
+        byte[] firstIp = {1, 2, 3, 4, 5};
+        byte[] secondIp = {1, 2, 3};
+
+        //Will throw IndexOutOfBounds because second array is smaller in size
+        assertFalse(Util.compareIpAddresses(firstIp, secondIp));
+    }
+
     public void testSplitArraySizeBigger() {
 
         byte[] array = {1, 2, 3, 4, 5, 6, 7, 8};
@@ -807,53 +852,61 @@ public class UtilTest extends TestCase {
 
     public void testCreateHttpBuilderProxyHost() throws IOException {
 
-        Controller someController = new Controller();
-        someController.startConfig(Constants.DEFAULT_CONFIG_FILE);
-        HttpClientBuilder httpClientBuilder = Util.createHttpClientBuilder(someController);
-        CloseableHttpClient closeableHttpClient = httpClientBuilder.build();
-        CloseableHttpResponse response = closeableHttpClient.execute(new HttpGet("http://powerfolder.com"));
-        assertEquals(200,response.getStatusLine().getStatusCode());
-        response.close();
-        closeableHttpClient.close();
-        someController.shutdown();
-
-        Controller trustAllController = someController;
-        trustAllController.getConfig().put("security.ssl.trust_any","true");
-        int statusCode = Util.createHttpClientBuilder(trustAllController).build().execute(new HttpGet("http://powerfolder.com"))
-                .getStatusLine().getStatusCode();
-
+        Controller controllerLisa = Controller.createController();
+        controllerLisa.startDefaultConfig();
+        controllerLisa.getConfig().put("disableui","true");
+        int statusCode = Util.createHttpClientBuilder(controllerLisa).build().execute(new HttpGet("http://powerfolder.com")).getStatusLine().getStatusCode();
         assertEquals(200, statusCode);
 
+        controllerLisa.getConfig().put("security.ssl.trust_any","true");
+        int statusCodeTrust = Util.createHttpClientBuilder(controllerLisa).build().execute(new HttpGet("http://powerfolder.com"))
+                .getStatusLine().getStatusCode();
+
+        assertEquals(200, statusCodeTrust);
 
         System.setProperty("http.proxyHost", "testProxy");
         System.setProperty("http.proxyPort", "1234");
-        Controller controller = new Controller();
-        controller.startDefaultConfig();
-        HttpClientBuilder builder = Util.createHttpClientBuilder(controller);
-        CloseableHttpClient client = builder.build();
         try {
-            client.execute(new HttpGet("http://powerfolder.com"));
-            fail("Did not throw exception with bad proxy");
-        } catch (ConnectException | UnknownHostException exception){
-            //OK since proxy is bad
+            Util.createHttpClientBuilder(controllerLisa).build().execute(new HttpGet("http://powerfolder.com"));
+            fail("Proxy was bad but it did not fail");
+        } catch (ConnectException | UnknownHostException exception) {
+            //OK Since proxy is bad
         }
 
-        Controller controllerWithProxyUser = new Controller();
-        controllerWithProxyUser.startDefaultConfig();
-        controllerWithProxyUser.getConfig().put("http.proxy.username","test");
-        controllerWithProxyUser.getConfig().put("http.proxy.password","testpass");
+        System.setProperty("http.proxyHost", "testProxy");
+        System.setProperty("http.proxyPort", "1234");
         try {
-            Util.createHttpClientBuilder(controllerWithProxyUser).build()
-                .execute(new HttpGet("http://powerfolder.com"));
-        } catch (ConnectException | UnknownHostException exception){
-            //OK since proxy is bad
+            Util.createHttpClientBuilder(controllerLisa).build().execute(new HttpGet("http://powerfolder.com"));
+            fail("Proxy was bad but it did not fail");
+        } catch (ConnectException | UnknownHostException exception) {
+            //OK Since proxy is bad
         }
+
+        controllerLisa.getConfig().put("http.proxy.username","test");
+        controllerLisa.getConfig().put("http.proxy.password","testpass");
+        try {
+            Util.createHttpClientBuilder(controllerLisa).build().execute(new HttpGet("http://powerfolder.com"));
+            fail("Proxy was bad but it did not fail");
+        } catch (ConnectException | UnknownHostException exception) {
+            //OK Since proxy is bad
+        }
+
 
         System.clearProperty("http.proxyHost");
         System.clearProperty("http.proxyPort");
+
+        controllerLisa.shutdown();
     }
 
+    public void testCompareVersions() {
+        String firstVersion = "8.1.0 aaa";
+        String secondVersion = "8.1.0 bbb";
+        assertFalse(Util.compareVersions(secondVersion, firstVersion));
 
+        String versionWeird = "TestOne";
+        String anotherVersionWeird = "TestTwo";
+        System.out.println(Util.compareVersions(versionWeird, anotherVersionWeird));
+    }
 
     public void testBetweenVersions() {
         assertFalse(Util.betweenVersion("8.1.0", "8.0.0", "8.2.20"));
