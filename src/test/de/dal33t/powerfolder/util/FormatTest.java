@@ -548,8 +548,8 @@ public class FormatTest {
     public void formatPercentOtherValuesTest() {
         assertEquals("100%", Format.formatPercent(Double.MAX_VALUE));
         assertEquals("0%", Format.formatPercent(Double.MIN_VALUE));
-        assertEquals(Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY, 0);
-        assertEquals(Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY, 0);
+        assertEquals("100%", Format.formatPercent(Double.POSITIVE_INFINITY));
+        assertEquals("-∞%", Format.formatPercent(Double.NEGATIVE_INFINITY));
     }
 
     @Test
