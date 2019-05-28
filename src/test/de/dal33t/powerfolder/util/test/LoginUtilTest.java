@@ -26,7 +26,11 @@ import de.dal33t.powerfolder.util.LoginUtil;
 import de.dal33t.powerfolder.util.Translation;
 import de.dal33t.powerfolder.util.Util;
 import junit.framework.TestCase;
+import org.apache.commons.io.FileUtils;
 
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.Arrays;
 
 public class LoginUtilTest extends TestCase {
@@ -144,11 +148,15 @@ public class LoginUtilTest extends TestCase {
 
     }
 
-    public void testIsUsernameAny() {
+    public void testIsUsernameAny() throws IOException {
         Controller controller = new Controller();
-        controller.startDefaultConfig();
+        File file = new File("build/test/testConfig.config");
+        file.createNewFile();
+        FileWriter fileWriter = new FileWriter(file);
+        fileWriter.write("disableui=true");
+        fileWriter.close();
+        controller.startConfig("build/test/testConfig.config");
 
-        controller.getConfig().put("disableui","true");
         controller.getConfig().put("server.username.isemail","No");
 
         assertFalse(LoginUtil.isUsernameAny(controller));
@@ -164,11 +172,18 @@ public class LoginUtilTest extends TestCase {
 
         controller.getConfig().put("server.username.isemail","BoTh");
         assertTrue(LoginUtil.isUsernameAny(controller));
+
+        FileUtils.forceDelete(file);
     }
 
-    public void testIsBooleanConfValueNull() {
+    public void testIsBooleanConfValueNull() throws IOException {
         Controller controller = new Controller();
-        controller.startDefaultConfig();
+        File file = new File("build/test/testConfig.config");
+        file.createNewFile();
+        FileWriter fileWriter = new FileWriter(file);
+        fileWriter.write("disableui=true");
+        fileWriter.close();
+        controller.startConfig("build/test/testConfig.config");
 
         controller.getConfig().put("disableui","true");
         controller.getConfig().setProperty("server.username.isemail", "null");
@@ -194,14 +209,19 @@ public class LoginUtilTest extends TestCase {
         assertTrue(LoginUtil.isBoolConfValue(controller));
 
         controller.shutdown();
-
+        FileUtils.forceDelete(file);
     }
 
-    public void testGetInviteUsernameShibboleth() {
+    public void testGetInviteUsernameShibboleth() throws IOException {
         Controller controller = new Controller();
-        controller.startDefaultConfig();
 
-        controller.getConfig().put("disableui","true");
+        File file = new File("build/test/testConfig.config");
+        file.createNewFile();
+        FileWriter fileWriter = new FileWriter(file);
+        fileWriter.write("disableui=true");
+        fileWriter.close();
+        controller.startConfig("build/test/testConfig.config");
+
         controller.getConfig().put("server.username.isemail","shibbolethTesting");
         assertEquals(Translation.get("general.email") + ":", LoginUtil.getInviteUsernameLabel(controller));
 
@@ -221,12 +241,17 @@ public class LoginUtilTest extends TestCase {
         assertEquals(Translation.get("general.email") + ":", LoginUtil.getInviteUsernameLabel(controller));
 
         controller.shutdown();
+        FileUtils.forceDelete(file);
     }
 
-    public void testGetInviteUsername() {
+    public void testGetInviteUsername() throws IOException {
         Controller controller = new Controller();
-        controller.startDefaultConfig();
-        controller.getConfig().put("disableui","true");
+        File file = new File("build/test/testConfig.config");
+        file.createNewFile();
+        FileWriter fileWriter = new FileWriter(file);
+        fileWriter.write("disableui=true");
+        fileWriter.close();
+        controller.startConfig("build/test/testConfig.config");
 
         //If it's not Shibboleth then same logic as getUsernameText
 
@@ -248,7 +273,7 @@ public class LoginUtilTest extends TestCase {
         assertEquals(Translation.get("general.username") + '/' + Translation.get("general.email") + ":",
                 LoginUtil.getInviteUsernameLabel(controller));
 
-
+        FileUtils.forceDelete(file);
 
     }
 
@@ -263,10 +288,15 @@ public class LoginUtilTest extends TestCase {
         }
     }
 
-    public void testGetUsernameTestOk() {
+    public void testGetUsernameTestOk() throws IOException {
         Controller controller = new Controller();
-        controller.startDefaultConfig();
-        controller.getConfig().put("disableui", "true");
+
+        File file = new File("build/test/testConfig.config");
+        file.createNewFile();
+        FileWriter fileWriter = new FileWriter(file);
+        fileWriter.write("disableui=true");
+        fileWriter.close();
+        controller.startConfig("build/test/testConfig.config");
 
         controller.getConfig().put("server.username.isemail","true");
         assertEquals(Translation.get("general.email"), LoginUtil.getUsernameText(controller));
@@ -285,12 +315,18 @@ public class LoginUtilTest extends TestCase {
         controller.getConfig().remove("server.username.isemail");
         assertEquals(Translation.get("general.username") + '/' + Translation.get("general.email"),
                 LoginUtil.getUsernameText(controller));
+
+        FileUtils.forceDelete(file);
     }
 
-    public void testIsUsernameEmailOnlyTest() {
+    public void testIsUsernameEmailOnlyTest() throws IOException {
         Controller controller = new Controller();
-        controller.startDefaultConfig();
-        controller.getConfig().put("disableui", "true");
+        File file = new File("build/test/testConfig.config");
+        file.createNewFile();
+        FileWriter fileWriter = new FileWriter(file);
+        fileWriter.write("disableui=true");
+        fileWriter.close();
+        controller.startConfig("build/test/testConfig.config");
 
         controller.getConfig().put("server.username.isemail","both");
         assertFalse(LoginUtil.isUsernameEmailOnly(controller));
@@ -303,13 +339,18 @@ public class LoginUtilTest extends TestCase {
 
         controller.getConfig().put("server.username.isemail","false");
         assertFalse(LoginUtil.isUsernameEmailOnly(controller));
+
+        FileUtils.forceDelete(file);
     }
 
-    public void testIsValidUsername() {
+    public void testIsValidUsername() throws IOException {
         Controller controller = new Controller();
-        controller.startDefaultConfig();
-        controller.getConfig().put("disableui", "true");
-
+        File file = new File("build/test/testConfig.config");
+        file.createNewFile();
+        FileWriter fileWriter = new FileWriter(file);
+        fileWriter.write("disableui=true");
+        fileWriter.close();
+        controller.startConfig("build/test/testConfig.config");
         assertFalse(LoginUtil.isValidUsername(controller,""));
         assertFalse(LoginUtil.isValidUsername(controller,"    "));
 
@@ -325,6 +366,8 @@ public class LoginUtilTest extends TestCase {
         assertTrue(LoginUtil.isValidUsername(controller, "UserOne"));
         assertTrue(LoginUtil.isValidUsername(controller,"Test@testing.com"));
         assertFalse(LoginUtil.isValidUsername(controller, "   "));
+
+        FileUtils.forceDelete(file);
     }
 
     public void testSatisfiesUnixPoicyNull() {

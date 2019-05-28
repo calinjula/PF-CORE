@@ -4,13 +4,17 @@ import de.dal33t.powerfolder.util.PathUtils;
 import de.dal33t.powerfolder.util.os.OSUtil;
 import de.dal33t.powerfolder.util.test.TestHelper;
 import junit.framework.TestCase;
+import org.apache.commons.io.FileUtils;
 
-import java.io.IOException;
+import java.io.*;
+import java.nio.channels.FileChannel;
 import java.nio.file.*;
 import java.nio.file.DirectoryStream.Filter;
 import java.nio.file.attribute.FileTime;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 public class PathUtilsTest extends TestCase {
 
@@ -1180,4 +1184,660 @@ public class PathUtilsTest extends TestCase {
         assertFalse(Files.exists(dir.resolve("sub")));
         assertFalse(Files.exists(dir.resolve("sub").resolve("d")));
     }
+
+    public void testIsDesktopIniNull() {
+        Path file = null;
+        try {
+            PathUtils.isDesktopIni(file);
+            fail("Did not throw NullPointerException but the path was null");
+        } catch (NullPointerException e){
+            //OK since path was null and it is supposed to throw this exception
+        }
+    }
+
+    public void testIsDesktopIniOk() {
+        Path path = new File(PathUtils.DESKTOP_INI_FILENAME).toPath();
+        assertTrue(PathUtils.isDesktopIni(path));
+
+        Path notDesktopIni = new File("TestFile.txt").toPath();
+        assertFalse(PathUtils.isDesktopIni(notDesktopIni));
+
+        Path stillNotDesktopIni = new File("File"+PathUtils.DESKTOP_INI_FILENAME).toPath();
+        assertFalse(PathUtils.isDesktopIni(stillNotDesktopIni));
+    }
+
+    public void testIsValidZipFileNull() {
+        Path file = null;
+        try {
+            PathUtils.isValidZipFile(file);
+            fail("Did not throw NullPointerException but the path was null");
+        } catch (NullPointerException e){
+            //OK since path was null and it is supposed to throw this exception
+        }
+    }
+
+    public void testIsValidZipFileOk() throws IOException {
+        Path zipFileThatDoesNotExist = new File("myArchive.zip").toPath();
+        //Throws IOExceptio
+        assertFalse(PathUtils.isValidZipFile(zipFileThatDoesNotExist));
+
+        File notZipFile = new File("build/myFile.txt");
+        notZipFile.createNewFile();
+        Path notZipFilePath = notZipFile.toPath();
+        assertFalse(PathUtils.isValidZipFile(notZipFilePath));
+
+        File zipFile = new File("build/emptyArchive.zip");
+        zipFile.createNewFile();
+        Path zipFilePath = zipFile.toPath();
+        //Because zip file is empty
+        assertFalse(PathUtils.isValidZipFile(zipFilePath));
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("Test String");
+
+        File fullZipFile = new File("build/fullArchive.zip");
+        ZipOutputStream out = new ZipOutputStream(new FileOutputStream(fullZipFile));
+        ZipEntry e = new ZipEntry("mytext.txt");
+        out.putNextEntry(e);
+
+        byte[] data = sb.toString().getBytes();
+        out.write(data, 0, data.length);
+        out.closeEntry();
+
+        out.close();
+
+        Path fullZipFilePath = fullZipFile.toPath();
+        assertTrue(PathUtils.isValidZipFile(fullZipFilePath));
+
+        FileUtils.forceDelete(notZipFile);
+        FileUtils.forceDelete(zipFile);
+        FileUtils.forceDelete(fullZipFile);
+    }
+
+    public void testIsSameNameNull(){
+
+        Path nullPath = null;
+        File file = new File("test.txt");
+        Path notNullPath = file.toPath();
+
+        try {
+            PathUtils.isSameName(nullPath, notNullPath);
+            fail("Did not throw NullPointerException but first path was null");
+        } catch (NullPointerException e){
+            //OK since first argument was null
+        }
+
+
+        try {
+            PathUtils.isSameName(notNullPath, nullPath);
+            fail("Did not throw NullPointerException but first path was null");
+        } catch (NullPointerException e){
+            //OK since first argument was null
+        }
+    }
+
+    public void testIsSameNameFileNull() {
+        File file = new File("/");
+        Path nullFileName = file.toPath();
+
+        File another = new File("myFile.txt");
+        Path notNullFileName = another.toPath();
+
+        assertFalse(PathUtils.isSameName(nullFileName, notNullFileName));
+        assertFalse(PathUtils.isSameName(notNullFileName, nullFileName));
+    }
+
+    public void testIsSameNameOk() {
+
+        File firstFile = new File("myFile.txt");
+        File secondFile = new File("myFile.pdf");
+
+        Path firstPath = firstFile.toPath();
+        Path secondPath = secondFile.toPath();
+        assertFalse(PathUtils.isSameName(firstPath, secondPath));
+
+        File oneFile = new File("testFile.csv");
+        File sameFile = new File("testFile.csv");
+        assertTrue(PathUtils.isSameName(oneFile.toPath(), sameFile.toPath()));
+
+        File file = new File("/build/test/file.docx");
+        File anotherFile = new File("/build/file.docx");
+        assertTrue(PathUtils.isSameName(file.toPath(), anotherFile.toPath()));
+    }
+
+    public void testRecursiveMoveCopyFallbackVisitorAlreadyExist() throws IOException {
+
+        File firstDirectory = new File("build/directoryOne");
+        firstDirectory.mkdir();
+
+        File secondDirectory = new File("build/directoryTwo");
+        secondDirectory.mkdir();
+
+        try {
+            PathUtils.recursiveMoveCopyFallbackVisitor(firstDirectory.toPath(), secondDirectory.toPath());
+            fail("Did not throw FileAlreadyExistsException when target directory already existed");
+        } catch (FileAlreadyExistsException e) {
+            //OK Since target directory already exists
+        }
+
+        FileUtils.deleteDirectory(firstDirectory);
+        FileUtils.deleteDirectory(secondDirectory);
+    }
+
+    public void testRecursiveMoveCopyFallbackVisitorCreatesDirectories() throws IOException {
+
+        File sourceDirectory = new File("build/directoryOne");
+        sourceDirectory.mkdir();
+
+        File targetDirectory = new File("build/directoryTwo");
+
+        PathUtils.recursiveMoveCopyFallbackVisitor(sourceDirectory.toPath(), targetDirectory.toPath());
+
+        assertTrue(targetDirectory.exists());
+        assertFalse(sourceDirectory.exists());
+
+        FileUtils.deleteDirectory(targetDirectory);
+
+    }
+
+    public void testRecursiveMoveCopyFallbackVisitorCopiesFiles() throws IOException {
+
+        File sourceDirectory = new File("build/directoryOne");
+        sourceDirectory.mkdir();
+
+        File targetDirectory = new File("build/directoryTwo");
+        File firstFile = new File("build/directoryOne/myFile.txt");
+        firstFile.createNewFile();
+        File secondFile = new File("build/directoryOne/anotherFile.pdf");
+        secondFile.createNewFile();
+        File thirdFile = new File("build/directoryOne/yetAnotherFile.docx");
+        thirdFile.createNewFile();
+
+        PathUtils.recursiveMoveCopyFallbackVisitor(sourceDirectory.toPath(), targetDirectory.toPath());
+
+        assertTrue(new File("build/directoryTwo/myFile.txt").exists());
+        assertTrue(new File("build/directoryTwo/anotherFile.pdf").exists());
+        assertTrue(new File("build/directoryTwo/yetAnotherFile.docx").exists());
+
+        assertFalse(firstFile.exists());
+        assertFalse(secondFile.exists());
+        assertFalse(thirdFile.exists());
+
+        FileUtils.deleteDirectory(targetDirectory);
+    }
+
+    public void testRecursiveMoveCopyFallbackVisitorCopiesDirectory() throws IOException {
+
+        //Create source directory and a directory within the source directory
+        File sourceDirectory = new File("build/directoryOne");
+        sourceDirectory.mkdir();
+        File subsourceDirectory = new File("build/directoryOne/subdirectory");
+        subsourceDirectory.mkdir();
+
+        File targetDirectory = new File("build/directoryTwo");
+
+        //Populate the source directory and the subsource directory with files
+        File firstFile = new File("build/directoryOne/myFile.txt");
+        firstFile.createNewFile();
+        File secondFile = new File("build/directoryOne/anotherFile.pdf");
+        secondFile.createNewFile();
+        File thirdFile = new File("build/directoryOne/yetAnotherFile.docx");
+        thirdFile.createNewFile();
+        File fourthFile = new File("build/directoryOne/subdirectory/subfile.csv");
+        fourthFile.createNewFile();
+
+        PathUtils.recursiveMoveCopyFallbackVisitor(sourceDirectory.toPath(), targetDirectory.toPath());
+
+        assertTrue(new File("build/directoryTwo/myFile.txt").exists());
+        assertTrue(new File("build/directoryTwo/anotherFile.pdf").exists());
+        assertTrue(new File("build/directoryTwo/yetAnotherFile.docx").exists());
+        assertTrue(new File("build/directoryTwo/subdirectory").isDirectory());
+        assertTrue(new File("build/directoryTwo/subdirectory/subfile.csv").exists());
+
+        assertFalse(firstFile.exists());
+        assertFalse(secondFile.exists());
+        assertFalse(thirdFile.exists());
+        assertFalse(sourceDirectory.exists());
+        assertFalse(fourthFile.exists());
+
+        FileUtils.deleteDirectory(targetDirectory);
+    }
+
+    public void testIsEmptyDirNullPath() {
+        boolean result = PathUtils.isEmptyDir(null, new Filter<Path>() {
+            @Override
+            public boolean accept(Path entry) throws IOException {
+                return false;
+            }
+        });
+
+        assertFalse(result);
+    }
+
+    public void testIsEmptyDirIoException() {
+        File directory = new File("build/test/myDirectory");
+        boolean result = PathUtils.isEmptyDir(directory.toPath(), new Filter<Path>() {
+            @Override
+            public boolean accept(Path entry) throws IOException {
+                return false;
+            }
+        });
+        assertFalse(result);
+    }
+
+    public void testIsEmptyDirOk() throws IOException {
+        File directory = new File("build/test/myDirectory");
+        directory.mkdir();
+
+        File fileToAdd = new File("build/test/myDirectory/myFile.csv");
+        fileToAdd.createNewFile();
+
+        boolean result = PathUtils.isEmptyDir(directory.toPath(), new Filter<Path>() {
+            @Override
+            public boolean accept(Path entry) throws IOException {
+                return true;
+            }
+        });
+
+        assertFalse(result);
+
+        FileUtils.forceDelete(fileToAdd);
+
+        boolean resultAfterDelete = PathUtils.isEmptyDir(directory.toPath(), new Filter<Path>() {
+            @Override
+            public boolean accept(Path entry) throws IOException {
+                return true;
+            }
+        });
+
+        assertTrue(resultAfterDelete);
+        FileUtils.deleteDirectory(directory);
+    }
+
+    public void testIsEmptyDirOneArgument() throws IOException {
+        File directory = new File("build/test/myDirectory");
+        directory.mkdir();
+
+        File fileToAdd = new File("build/test/myDirectory/myFile.csv");
+        fileToAdd.createNewFile();
+
+        boolean result = PathUtils.isEmptyDir(directory.toPath());
+        assertFalse(result);
+
+        FileUtils.forceDelete(fileToAdd);
+        boolean resultAfterDelete = PathUtils.isEmptyDir(directory.toPath());
+        assertTrue(resultAfterDelete);
+
+        FileUtils.deleteDirectory(directory);
+    }
+
+    public void testGetSuggestedFolderNameNullPath() {
+        Path file = null;
+        assertNull(PathUtils.getSuggestedFolderName(file));
+    }
+
+    public void testGetSuggestedFolderNameEmpty() {
+        File file = new File(" ");
+        Path path = file.toPath();
+        assertEquals(path.toAbsolutePath().toString(), PathUtils.getSuggestedFolderName(path));
+    }
+
+    public void testGetSuggestedFolderNameOk() {
+        File file = new File("build/test/myFile.csv");
+        Path path = file.toPath();
+        assertEquals("myFile.csv", PathUtils.getSuggestedFolderName(path));
+
+        File pdfFile = new File("build/test/pdfFile.pdf");
+        Path pdfPath = pdfFile.toPath();
+        assertEquals("pdfFile.pdf", PathUtils.getSuggestedFolderName(pdfPath));
+
+        File docFile = new File("build/test/myFile.docx");
+        Path docPath = docFile.toPath();
+        assertEquals("myFile.docx", PathUtils.getSuggestedFolderName(docPath));
+
+    }
+
+    public void testCopyFileExceptionsNull() throws IOException {
+        Path fromPath = null;
+        Path toPath = new File("build/test/someFile.txt").toPath();
+        try {
+            PathUtils.copyFile(fromPath, toPath);
+            fail("Did not throw NullPointerException but from file was null");
+        } catch (NullPointerException e) {
+            //OK to throw since from file was null
+        }
+    }
+
+    public void testCopyFileIoExceptions() throws IOException {
+        Path fromPath = new File("build/test/thisDoesNotExist.txt").toPath();
+        Path toPath = new File("build/test/anotherFile.txt").toPath();
+
+        try {
+            PathUtils.copyFile(fromPath, toPath);
+            fail("Did not throw IOException but from path did not exist");
+        } catch (IOException e) {
+            //OK since from path does not exist
+        }
+
+        File thisExists = new File("build/test/exists.txt");
+        thisExists.createNewFile();
+
+        try {
+            PathUtils.copyFile(thisExists.toPath(), thisExists.toPath());
+            fail("Did not throw IOException but from and to were the same file");
+        } catch (IOException e) {
+            //OK since from and two were identical
+        }
+
+        FileUtils.forceDelete(thisExists);
+    }
+
+    public void testInvalidFileNameDots() {
+        assertTrue(PathUtils.containsInvalidChar("."));
+        assertTrue(PathUtils.containsInvalidChar(".."));
+        assertTrue(PathUtils.containsInvalidChar("my<file"));
+        assertTrue(PathUtils.containsInvalidChar("another>File"));
+        assertTrue(PathUtils.containsInvalidChar("file\\file"));
+        assertTrue(PathUtils.containsInvalidChar("file/toFile"));
+        assertTrue(PathUtils.containsInvalidChar("file?"));
+        assertTrue(PathUtils.containsInvalidChar("file*test"));
+        assertTrue(PathUtils.containsInvalidChar("file|filetest"));
+        assertTrue(PathUtils.containsInvalidChar("path\"test"));
+
+        assertFalse(PathUtils.containsInvalidChar("myFile.txt"));
+        assertFalse(PathUtils.containsInvalidChar("myFile123.csv"));
+        assertFalse(PathUtils.containsInvalidChar("Homer.pdf.txt"));
+        assertFalse(PathUtils.containsInvalidChar("Lisa_Bart"));
+        assertFalse(PathUtils.containsInvalidChar("test-simpsons_Testing.csv"));
+    }
+
+    public void testRemoveInvalidCharsNullFilename() {
+        File file = new File("/");
+        Path path = file.toPath();
+        Path returnedPath = PathUtils.removeInvalidFilenameChars(path);
+        assertEquals(path, returnedPath);
+    }
+
+    public void testRemoveInvalidCharsOk() {
+        File file = new File("build/test/someFile.csv");
+        Path path = file.toPath();
+        Path returnedPath = PathUtils.removeInvalidFilenameChars(path);
+        assertEquals(path, returnedPath);
+
+        file = new File("build/test/another|File.csv");
+        path = file.toPath();
+        returnedPath = PathUtils.removeInvalidFilenameChars(path);
+        assertEquals("anotherFile.csv",returnedPath.getFileName().toString());
+
+
+        file = new File("build/test/yetAnother<>|File.csv");
+        path = file.toPath();
+        returnedPath = PathUtils.removeInvalidFilenameChars(path);
+        assertEquals("yetAnotherFile.csv",returnedPath.getFileName().toString());
+
+
+        file = new File("build/test/stars***Stars.csv   ");
+        path = file.toPath();
+        returnedPath = PathUtils.removeInvalidFilenameChars(path);
+        assertEquals("starsStars.csv",returnedPath.getFileName().toString());
+
+
+        file = new File("myFile?Yes");
+        path = file.toPath();
+        returnedPath = PathUtils.removeInvalidFilenameChars(path);
+        assertEquals("myFileYes",returnedPath.getFileName().toString());
+    }
+
+    public void testRawCopyNullInputStreamTest() throws IOException {
+        File file = new File("build/test/file.txt");
+        file.createNewFile();
+
+        OutputStream outputStream = new FileOutputStream(file);
+        InputStream inputStream = null;
+
+        try {
+            PathUtils.rawCopy(inputStream, outputStream);
+            fail("Did not throw NullPointerException but input stream was null");
+        } catch (NullPointerException e){
+            //OK since InputStream was null
+        }
+
+        FileUtils.forceDelete(file);
+    }
+
+    public void testRawCopyNullOutputStreamTest() throws IOException {
+        File file = new File("build/test/file.txt");
+        file.createNewFile();
+
+        FileInputStream fileInputStream = new FileInputStream(file);
+        OutputStream outputStream = null;
+        try {
+            PathUtils.rawCopy(fileInputStream, outputStream);
+            fail("Did not throw NullPointerException but output stream was null");
+        } catch (NullPointerException e){
+            //OK since OutputStream was null
+        }
+    }
+
+    public void testRawCopyOk() throws IOException {
+        File file = new File("build/test/file.txt");
+        file.createNewFile();
+
+        FileWriter fileWriter = new FileWriter(file);
+        fileWriter.write("Mary had a little lamb, little lamb...");
+        fileWriter.close();
+
+        FileInputStream fileInputStream = new FileInputStream(file);
+
+        File copiedFile = new File("build/copiedFile.txt");
+        FileOutputStream fileOutputStream = new FileOutputStream(copiedFile);
+
+        PathUtils.rawCopy(fileInputStream, fileOutputStream);
+        assertTrue(copiedFile.exists());
+        assertEquals(file.length(), copiedFile.length());
+
+        FileUtils.forceDelete(copiedFile);
+    }
+
+    public void testRawCopyLarge() throws IOException {
+        File file = new File("build/test/file.txt");
+        file.createNewFile();
+
+        FileWriter fileWriter = new FileWriter(file);
+        for (int index = 0; index < 100000000; index++) {
+            fileWriter.write(index);
+        }
+        fileWriter.close();
+
+        FileInputStream fileInputStream = new FileInputStream(file);
+
+        File copiedFile = new File("build/copiedFile.txt");
+        FileOutputStream fileOutputStream = new FileOutputStream(copiedFile);
+
+        PathUtils.rawCopy(fileInputStream, fileOutputStream);
+        assertTrue(copiedFile.exists());
+        assertEquals(file.length(), copiedFile.length());
+
+        FileUtils.forceDelete(copiedFile);
+    }
+
+    public void testNCopyRandomAccessFileEOF() throws IOException {
+        File inputFile = new File("build/test/firstFile.txt");
+        inputFile.createNewFile();
+
+        FileWriter fileWriter = new FileWriter(inputFile);
+        fileWriter.write("The quick brown fox jumps over the lazy dog");
+        fileWriter.close();
+
+        RandomAccessFile input = new RandomAccessFile(inputFile, "rw");
+
+        File outputFile = new File("build/test/secondFile.txt");
+        outputFile.createNewFile();
+        RandomAccessFile output = new RandomAccessFile(outputFile, "rw");
+
+        try {
+            PathUtils.ncopy(input, output, 128);
+            fail("EOF not thrown");
+        } catch (EOFException e){
+            //OK since it was supposed to throw EOF
+        }
+    }
+
+    public void testNCopyRandomAccessFilePartial() throws IOException {
+        File inputFile = new File("build/test/firstFile.txt");
+        inputFile.createNewFile();
+
+        FileWriter fileWriter = new FileWriter(inputFile);
+        for (int index = 0; index < 100000; index++) {
+            fileWriter.write(index);
+        }
+        fileWriter.close();
+
+
+        RandomAccessFile input = new RandomAccessFile(inputFile, "rw");
+
+        File outputFile = new File("build/test/secondFile.txt");
+        outputFile.createNewFile();
+        RandomAccessFile output = new RandomAccessFile(outputFile, "rw");
+
+        PathUtils.ncopy(input, output, 1);
+        //8192 is the byte chunk size of the PathUtils
+        assertEquals(8192, outputFile.length());
+
+    }
+
+    public void testNCopyStreamRafEOF() throws IOException {
+        File inputFile = new File("build/test/firstFile.txt");
+        inputFile.createNewFile();
+
+        FileWriter fileWriter = new FileWriter(inputFile);
+        fileWriter.write("The quick brown fox jumps over the lazy dog");
+        fileWriter.close();
+
+        InputStream input = new FileInputStream(inputFile);
+
+        File outputFile = new File("build/test/secondFile.txt");
+        outputFile.createNewFile();
+        RandomAccessFile output = new RandomAccessFile(outputFile, "rw");
+
+        try {
+            PathUtils.ncopy(input, output, 128);
+            fail("EOF not thrown");
+        } catch (EOFException e){
+            //OK since it was supposed to throw EOF
+        }
+    }
+
+    public void testNCopyStreamRafOk() throws IOException {
+        File inputFile = new File("build/test/firstFile.txt");
+        inputFile.createNewFile();
+
+        FileWriter fileWriter = new FileWriter(inputFile);
+        for (int index = 0; index < 100000; index++) {
+            fileWriter.write(index);
+        }
+        fileWriter.close();
+
+
+        InputStream input = new FileInputStream(inputFile);
+
+        File outputFile = new File("build/test/secondFile.txt");
+        outputFile.createNewFile();
+        RandomAccessFile output = new RandomAccessFile(outputFile, "rw");
+
+        PathUtils.ncopy(input, output, 8192 * 9);
+        //8192 is the byte chunk size of the PathUtils
+        assertEquals(8192 * 9, outputFile.length());
+
+    }
+
+    public void testNCopyFileChannelFileChannelEOF() throws IOException {
+        File inputFile = new File("build/test/firstFile.txt");
+        inputFile.createNewFile();
+
+        FileWriter fileWriter = new FileWriter(inputFile);
+        fileWriter.write("The quick brown fox jumps over the lazy dog");
+        fileWriter.close();
+
+        FileChannel input = new RandomAccessFile(inputFile, "rw").getChannel();
+
+        File outputFile = new File("build/test/secondFile.txt");
+        outputFile.createNewFile();
+        FileChannel output = new RandomAccessFile(outputFile, "rw").getChannel();
+
+        try {
+            PathUtils.ncopy(input, output, 128);
+            fail("EOF not thrown");
+        } catch (EOFException e){
+            //OK since it was supposed to throw EOF
+        }
+    }
+
+    public void testNCopyStreamFileChannelFileChannelOk() throws IOException {
+        File inputFile = new File("build/test/firstFile.txt");
+        inputFile.createNewFile();
+
+        FileWriter fileWriter = new FileWriter(inputFile);
+        for (int index = 0; index < 100000; index++) {
+            fileWriter.write(index);
+        }
+        fileWriter.close();
+
+        FileChannel input = new RandomAccessFile(inputFile,"rw").getChannel();
+
+        File outputFile = new File("build/test/secondFile.txt");
+        outputFile.createNewFile();
+        FileChannel output = new RandomAccessFile(outputFile, "rw").getChannel();
+
+        PathUtils.ncopy(input, output, 8192 * 5);
+        //8192 is the byte chunk size of the PathUtils
+        assertEquals(8192 * 5, outputFile.length());
+
+    }
+
+    public void testNCopyInputStreamFileChannelEOF() throws IOException {
+        File inputFile = new File("build/test/firstFile.txt");
+        inputFile.createNewFile();
+
+        FileWriter fileWriter = new FileWriter(inputFile);
+        fileWriter.write("The quick brown fox jumps over the lazy dog");
+        fileWriter.close();
+
+        InputStream input = new FileInputStream(inputFile);
+
+        File outputFile = new File("build/test/secondFile.txt");
+        outputFile.createNewFile();
+        FileChannel output = new RandomAccessFile(outputFile, "rw").getChannel();
+
+        try {
+            PathUtils.ncopy(input, output, 128);
+            fail("EOF not thrown");
+        } catch (EOFException e){
+            //OK since it was supposed to throw EOF
+        }
+    }
+
+    public void testNCopyStreamFileChannelOk() throws IOException {
+        File inputFile = new File("build/test/firstFile.txt");
+        inputFile.createNewFile();
+
+        FileWriter fileWriter = new FileWriter(inputFile);
+        for (int index = 0; index < 100000; index++) {
+            fileWriter.write(index);
+        }
+        fileWriter.close();
+
+        InputStream input = new FileInputStream(inputFile);
+
+        File outputFile = new File("build/test/secondFile.txt");
+        outputFile.createNewFile();
+        FileChannel output = new RandomAccessFile(outputFile, "rw").getChannel();
+
+        PathUtils.ncopy(input, output, 8192 * 10);
+        //8192 is the byte chunk size of the PathUtils
+        assertEquals(8192 * 10, outputFile.length());
+
+    }
+
+
 }
