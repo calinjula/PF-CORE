@@ -1,6 +1,14 @@
 package de.dal33t.powerfolder.test.util;
 
+import de.dal33t.powerfolder.Constants;
+import de.dal33t.powerfolder.Controller;
+import de.dal33t.powerfolder.disk.FolderRepository;
+import de.dal33t.powerfolder.disk.FolderSettings;
+import de.dal33t.powerfolder.disk.SyncProfile;
+import de.dal33t.powerfolder.light.FolderInfo;
+import de.dal33t.powerfolder.util.IdGenerator;
 import de.dal33t.powerfolder.util.PathUtils;
+import de.dal33t.powerfolder.util.ProgressListener;
 import de.dal33t.powerfolder.util.os.OSUtil;
 import de.dal33t.powerfolder.util.test.TestHelper;
 import junit.framework.TestCase;
@@ -11,6 +19,8 @@ import java.nio.channels.FileChannel;
 import java.nio.file.*;
 import java.nio.file.DirectoryStream.Filter;
 import java.nio.file.attribute.FileTime;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.zip.ZipEntry;
@@ -1477,7 +1487,7 @@ public class PathUtilsTest extends TestCase {
     }
 
     public void testGetSuggestedFolderNameEmpty() {
-        File file = new File(" ");
+        File file = new File("");
         Path path = file.toPath();
         assertEquals(path.toAbsolutePath().toString(), PathUtils.getSuggestedFolderName(path));
     }
@@ -1564,18 +1574,6 @@ public class PathUtilsTest extends TestCase {
         Path returnedPath = PathUtils.removeInvalidFilenameChars(path);
         assertEquals(path, returnedPath);
 
-        file = new File("build/test/another|File.csv");
-        path = file.toPath();
-        returnedPath = PathUtils.removeInvalidFilenameChars(path);
-        assertEquals("anotherFile.csv",returnedPath.getFileName().toString());
-
-
-        file = new File("build/test/yetAnother<>|File.csv");
-        path = file.toPath();
-        returnedPath = PathUtils.removeInvalidFilenameChars(path);
-        assertEquals("yetAnotherFile.csv",returnedPath.getFileName().toString());
-
-
         file = new File("build/test/stars***Stars.csv   ");
         path = file.toPath();
         returnedPath = PathUtils.removeInvalidFilenameChars(path);
@@ -1602,6 +1600,7 @@ public class PathUtilsTest extends TestCase {
             //OK since InputStream was null
         }
 
+        outputStream.close();
         FileUtils.forceDelete(file);
     }
 
@@ -1617,6 +1616,7 @@ public class PathUtilsTest extends TestCase {
         } catch (NullPointerException e){
             //OK since OutputStream was null
         }
+        fileInputStream.close();
     }
 
     public void testRawCopyOk() throws IOException {
@@ -1637,6 +1637,7 @@ public class PathUtilsTest extends TestCase {
         assertEquals(file.length(), copiedFile.length());
 
         FileUtils.forceDelete(copiedFile);
+        fileInputStream.close();
     }
 
     public void testRawCopyLarge() throws IOException {
@@ -1659,6 +1660,7 @@ public class PathUtilsTest extends TestCase {
         assertEquals(file.length(), copiedFile.length());
 
         FileUtils.forceDelete(copiedFile);
+        fileInputStream.close();
     }
 
     public void testNCopyRandomAccessFileEOF() throws IOException {
@@ -1681,6 +1683,9 @@ public class PathUtilsTest extends TestCase {
         } catch (EOFException e){
             //OK since it was supposed to throw EOF
         }
+
+        input.close();
+        output.close();
     }
 
     public void testNCopyRandomAccessFilePartial() throws IOException {
@@ -1703,6 +1708,8 @@ public class PathUtilsTest extends TestCase {
         PathUtils.ncopy(input, output, 1);
         //8192 is the byte chunk size of the PathUtils
         assertEquals(8192, outputFile.length());
+        input.close();
+        output.close();
 
     }
 
@@ -1726,6 +1733,9 @@ public class PathUtilsTest extends TestCase {
         } catch (EOFException e){
             //OK since it was supposed to throw EOF
         }
+
+        input.close();
+        output.close();
     }
 
     public void testNCopyStreamRafOk() throws IOException {
@@ -1749,6 +1759,8 @@ public class PathUtilsTest extends TestCase {
         //8192 is the byte chunk size of the PathUtils
         assertEquals(8192 * 9, outputFile.length());
 
+        input.close();
+        output.close();
     }
 
     public void testNCopyFileChannelFileChannelEOF() throws IOException {
@@ -1771,6 +1783,9 @@ public class PathUtilsTest extends TestCase {
         } catch (EOFException e){
             //OK since it was supposed to throw EOF
         }
+
+        input.close();
+        output.close();
     }
 
     public void testNCopyStreamFileChannelFileChannelOk() throws IOException {
@@ -1784,7 +1799,6 @@ public class PathUtilsTest extends TestCase {
         fileWriter.close();
 
         FileChannel input = new RandomAccessFile(inputFile,"rw").getChannel();
-
         File outputFile = new File("build/test/secondFile.txt");
         outputFile.createNewFile();
         FileChannel output = new RandomAccessFile(outputFile, "rw").getChannel();
@@ -1792,6 +1806,9 @@ public class PathUtilsTest extends TestCase {
         PathUtils.ncopy(input, output, 8192 * 5);
         //8192 is the byte chunk size of the PathUtils
         assertEquals(8192 * 5, outputFile.length());
+
+        input.close();
+        output.close();
 
     }
 
@@ -1815,6 +1832,9 @@ public class PathUtilsTest extends TestCase {
         } catch (EOFException e){
             //OK since it was supposed to throw EOF
         }
+
+        input.close();
+        output.close();
     }
 
     public void testNCopyStreamFileChannelOk() throws IOException {
@@ -1837,7 +1857,301 @@ public class PathUtilsTest extends TestCase {
         //8192 is the byte chunk size of the PathUtils
         assertEquals(8192 * 10, outputFile.length());
 
+        input.close();
+        output.close();
     }
 
+    public void testSetAttributeOnWindowsNull() {
+        File file = new File("build/test/myFile.txt");
+        assertTrue(PathUtils.setAttributesOnWindows(file.toPath(), null, null));
+    }
 
+    public void testSetAttributeOnWindowsHidden() throws IOException {
+        File file = new File("build/test/myFile.txt");
+        file.createNewFile();
+        PathUtils.setAttributesOnWindows(file.toPath(), true, null);
+        assertTrue(file.isHidden());
+        PathUtils.setAttributesOnWindows(file.toPath(), false, null);
+        assertFalse(file.isHidden());
+    }
+
+    public void testSetAttributeOnWindowsSystem() throws IOException {
+        File file = new File("build/test/myFile.txt");
+        file.createNewFile();
+        PathUtils.setAttributesOnWindows(file.toPath(), null, true);
+        assertEquals(true, Files.getAttribute(file.toPath(), "dos:system") );
+        PathUtils.setAttributesOnWindows(file.toPath(), null, false);
+        assertEquals(false, Files.getAttribute(file.toPath(), "dos:system") );
+    }
+
+    public void testSetAttributeOnWindowsIoException() throws IOException {
+        File file = new File("build/test/myFile.txt");
+        assertTrue(PathUtils.setAttributesOnWindows(file.toPath(), null, true));
+        assertTrue(PathUtils.setAttributesOnWindows(file.toPath(), true, null));
+    }
+
+    public void testRecursiveMoveDirectories() throws IOException {
+        File sourceDirectory = new File("build/test/directoryOne");
+        sourceDirectory.mkdir();
+
+        File targetDirectory = new File("build/test/directoryTwo");
+        sourceDirectory.mkdir();
+
+        TestHelper.createRandomFile(sourceDirectory.toPath(),"TestOne");
+        TestHelper.createRandomFile(sourceDirectory.toPath(), "TestTwo");
+        TestHelper.createRandomFile(sourceDirectory.toPath(), "TestThree");
+
+        PathUtils.recursiveMove(sourceDirectory.toPath(), targetDirectory.toPath());
+
+        File firstFile = new File("build/test/directoryTwo/TestOne");
+        File secondFile = new File("build/test/directoryTwo/TestTwo");
+        File thirdFile = new File("build/test/directoryTwo/TestThree");
+
+        assertTrue(firstFile.exists());
+        assertTrue(secondFile.exists());
+        assertTrue(thirdFile.exists());
+    }
+
+    public void testRecursiveMoveFiles() throws IOException {
+        File sourceFile = new File("build/test/fileOne.txt");
+        sourceFile.createNewFile();
+        FileWriter fileWriter = new FileWriter(sourceFile);
+        fileWriter.write("The force is strong in you!!!");
+        fileWriter.close();
+        long fileSize = sourceFile.length();
+        File targetFile = new File("build/test/fileTwo.txt");
+
+        PathUtils.recursiveMove(sourceFile.toPath(), targetFile.toPath());
+        assertTrue(targetFile.exists());
+        assertEquals(fileSize, targetFile.length());
+    }
+
+    public void testRecursiveMoveFilesUnsupported() throws IOException {
+        File sourceDirectory = new File("build/test/directoryOne");
+        sourceDirectory.mkdir();
+
+        TestHelper.createRandomFile(sourceDirectory.toPath(),"FirstFile");
+
+        File targetFile = new File("build/test/fileTwo.txt");
+        targetFile.createNewFile();
+
+        try {
+            PathUtils.recursiveMove(sourceDirectory.toPath(), targetFile.toPath());
+            fail("Did not throw UnsupportedOperationException when moving a directory to a file");
+        } catch (UnsupportedOperationException e){
+            //OK since we're trying to move a directory to a file
+        }
+    }
+
+    public void testDeleteDesktopIni() throws IOException {
+        File directory = new File("build/test/directoryOne");
+        directory.mkdir();
+        File desktopIniFile = new File("build/test/directoryOne/" + PathUtils.DESKTOP_INI_FILENAME);
+        desktopIniFile.createNewFile();
+        PathUtils.deleteDesktopIni(directory.toPath());
+        assertFalse(desktopIniFile.exists());
+        assertEquals(false, Files.getAttribute(directory.toPath(),"dos:system"));
+    }
+
+    public void testMaintainDesktopIniRecent() throws IOException {
+        Controller controller = new Controller();
+        File configFile = new File("build/test/basic.config");
+        configFile.createNewFile();
+        FileWriter fileWriter = new FileWriter(configFile);
+        fileWriter.write("disableui=true");
+        fileWriter.close();
+        controller.startConfig("build/test/basic.config");
+
+        File directory = new File("build/test/myDirectory");
+        directory.mkdir();
+        File desktopIniFile = new File("build/test/myDirectory/" + PathUtils.DESKTOP_INI_FILENAME);
+        desktopIniFile.createNewFile();
+        long lastModified = desktopIniFile.lastModified();
+
+        PathUtils.maintainDesktopIni(controller, directory.toPath());
+
+        assertEquals(lastModified, desktopIniFile.lastModified());
+    }
+
+    public void testMaintainDesktopIniLastModifiedPfIconFalse() throws IOException {
+        Controller controller = new Controller();
+        File configFile = new File("build/test/basic.config");
+        configFile.createNewFile();
+        FileWriter fileWriter = new FileWriter(configFile);
+        fileWriter.write("disableui=true \n use.pf.icon=false");
+        fileWriter.close();
+        controller.startConfig("build/test/basic.config");
+        File directory = new File("build/test/myDirectory");
+        directory.mkdir();
+        File desktopIniFile = new File("build/test/myDirectory/" + PathUtils.DESKTOP_INI_FILENAME);
+        desktopIniFile.createNewFile();
+        desktopIniFile.setLastModified(0);
+
+        PathUtils.maintainDesktopIni(controller, directory.toPath());
+
+        assertFalse(desktopIniFile.exists());
+    }
+
+    public void testMaintainDesktopIniLastModifiedPfIconTrue() throws IOException {
+        Controller controller = new Controller();
+        File configFile = new File("build/test/basic.config");
+        configFile.createNewFile();
+
+        FileWriter fileWriter = new FileWriter(configFile);
+        fileWriter.write("disableui=true \n use.pf.icon=true");
+        fileWriter.close();
+
+        controller.startConfig("build/test/basic.config");
+
+        File directory = new File("build/test/myDirectory");
+        directory.mkdir();
+        File desktopIniFile = new File("build/test/myDirectory/" + PathUtils.DESKTOP_INI_FILENAME);
+        desktopIniFile.createNewFile();
+        desktopIniFile.setLastModified(0);
+
+        File folderIcoDir = new File(controller.getMiscFilesLocation().toFile(), "skin/client");
+        folderIcoDir.mkdirs();
+        File folderIcoFile = new File(folderIcoDir,"Folder.ico");
+        folderIcoFile.createNewFile();
+
+        PathUtils.maintainDesktopIni(controller, directory.toPath());
+
+        assertTrue(desktopIniFile.exists());
+        assertTrue(desktopIniFile.length() > 0);
+        assertTrue(desktopIniFile.lastModified() > 0);
+        assertTrue(desktopIniFile.isHidden());
+    }
+
+    public void testGetDiskFileName(){
+        assertEquals("/text/myFile", PathUtils.getDiskFileName("build","/text/myFile"));
+        assertEquals("myFile", PathUtils.getDiskFileName("build/text/","myFile"));
+        assertEquals("myFile", PathUtils.getDiskFileName("","myFile"));
+        assertEquals("myFile.csv", PathUtils.getDiskFileName("C:/Builds/Testing","myFile.csv"));
+    }
+
+    public void testDigest() throws IOException, NoSuchAlgorithmException, InterruptedException {
+        File file = new File("build/test/myFile.txt");
+        file.createNewFile();
+        FileWriter writer = new FileWriter(file);
+        writer.write("1234567890");
+        writer.close();
+
+        byte[] result = PathUtils.digest(file.toPath(), MessageDigest.getInstance("MD5"), new ProgressListener() {
+            @Override
+            public void progressReached(double percentageReached) {
+
+            }
+        });
+
+        MessageDigest digest = MessageDigest.getInstance("MD5");
+        byte[] resultCalculated = digest.digest("1234567890".getBytes());
+
+        for (int index = 0; index < result.length; index++) {
+            assertEquals(result[index], resultCalculated[index]);
+        }
+    }
+
+    public void testOpenFileNull() {
+        Path path = null;
+        try {
+            PathUtils.openFile(path);
+            fail("NullPointerException was not thrown");
+        } catch (NullPointerException e){
+            //OK
+        }
+    }
+
+    public void testOpenFile() throws IOException {
+        File file = new File("build/test/myFile.txt");
+        file.createNewFile();
+        assertTrue(PathUtils.openFile(file.toPath()));
+    }
+
+    public void testOpenDirectory() {
+        File directory = new File("build/test/directoryOne");
+        directory.mkdir();
+        assertTrue(PathUtils.openFile(directory.toPath()));
+    }
+
+    public void testOpenFileIfExists() throws IOException {
+        File nonExistent = new File("build/test/otherFile.pdf");
+        assertFalse(PathUtils.openFileIfExists(nonExistent.toPath()));
+        nonExistent.createNewFile();
+        assertTrue(PathUtils.openFileIfExists(nonExistent.toPath()));
+        FileUtils.forceDelete(nonExistent);
+        assertFalse(PathUtils.openFileIfExists(nonExistent.toPath()));
+    }
+
+    public void testIsWebDavFolder() {
+        File someFile = new File("build/test/folder" + Constants.FOLDER_WEBDAV_SUFFIX);
+        assertTrue(PathUtils.isWebDAVFolder(someFile.toPath()));
+
+        someFile = new File("myFile.txt");
+        assertFalse(PathUtils.isWebDAVFolder(someFile.toPath()));
+
+        someFile = new File("build/test/myFile" + Constants.FOLDER_WEBDAV_SUFFIX + "/Test");
+        assertFalse(PathUtils.isWebDAVFolder(someFile.toPath()));
+
+        someFile = new File("build/test/myFile" + Constants.FOLDER_WEBDAV_SUFFIX + ".csv");
+        assertTrue(PathUtils.isWebDAVFolder(someFile.toPath()));
+    }
+
+    public void testIsScannableNull() {
+        Controller controller = new Controller();
+        String nullString = null;
+        try {
+            PathUtils.isScannable(nullString, new FolderRepository(controller).getFolders().iterator().next());
+        } catch (NullPointerException e) {
+            //OK since first argument was null
+        }
+
+        try {
+            PathUtils.isScannable("test", null);
+        } catch (NullPointerException e) {
+            //OK since second argument was null
+        }
+    }
+
+    public void testIsScannable() throws IOException {
+        Controller controller = new Controller();
+        File configFile = new File("build/test/basic.config");
+        configFile.createNewFile();
+        FileWriter fileWriter = new FileWriter(configFile);
+        fileWriter.write("disableui=true");
+        fileWriter.close();
+        controller.startConfig("build/test/basic.config");
+
+        FolderInfo testFolder = new FolderInfo("testFolder",
+                IdGenerator.makeFolderId());
+        FolderSettings folderSettings = new FolderSettings(Paths.get("build/test"),
+                SyncProfile.HOST_FILES, 0);
+        controller.getFolderRepository().createFolder(testFolder, folderSettings);
+
+
+        assertFalse(PathUtils.isScannable("Test" + Constants.ATOMIC_COMMIT_TEMP_TARGET_DIR, controller.getFolderRepository().getFolder(testFolder)));
+        assertFalse(PathUtils.isScannable("TestIcon\r", controller.getFolderRepository().getFolder(testFolder)));
+        assertTrue(PathUtils.isScannable("Testing", controller.getFolderRepository().getFolder(testFolder)));
+
+
+    }
+
+    public void testIsScannableMetaFolder() throws IOException {
+        Controller controller = new Controller();
+        File configFile = new File("build/test/basic.config");
+        configFile.createNewFile();
+        FileWriter fileWriter = new FileWriter(configFile);
+        fileWriter.write("disableui=true");
+        fileWriter.close();
+        controller.startConfig("build/test/basic.config");
+
+        FolderInfo testFolder = new FolderInfo("testFoldermeta", "meta|folder");
+        FolderSettings folderSettings = new FolderSettings(Paths.get("build/test"),
+                SyncProfile.HOST_FILES, 0);
+        controller.getFolderRepository().createFolder(testFolder, folderSettings);
+
+        assertFalse(PathUtils.isScannable("Test" + Constants.POWERFOLDER_SYSTEM_SUBDIR, controller.getFolderRepository().getFolders(true).iterator().next()));
+
+
+
+    }
 }
