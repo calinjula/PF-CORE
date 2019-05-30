@@ -13,10 +13,13 @@ import de.dal33t.powerfolder.util.os.OSUtil;
 import de.dal33t.powerfolder.util.test.TestHelper;
 import junit.framework.TestCase;
 import org.apache.commons.io.FileUtils;
+import org.cryptomator.cryptofs.CryptoFileSystemProperties;
+import org.cryptomator.cryptofs.CryptoFileSystemProvider;
 
 import java.io.*;
 import java.nio.channels.FileChannel;
 import java.nio.file.*;
+import java.nio.file.FileSystem;
 import java.nio.file.DirectoryStream.Filter;
 import java.nio.file.attribute.FileTime;
 import java.security.MessageDigest;
@@ -2151,7 +2154,204 @@ public class PathUtilsTest extends TestCase {
 
         assertFalse(PathUtils.isScannable("Test" + Constants.POWERFOLDER_SYSTEM_SUBDIR, controller.getFolderRepository().getFolders(true).iterator().next()));
 
+    }
+
+    public void testCreateEmptyDirectory() {
+        File baseDir = new File("build/test/base.directory");
+        baseDir.mkdir();
+        PathUtils.createEmptyDirectory(baseDir.toPath());
+        File createdDir = new File("build/test/base (2).directory");
+        assertTrue(createdDir.exists());
+        assertTrue(createdDir.isDirectory());
+    }
+
+    public void testCopyFileException() throws IOException {
+        File file = new File("build/test/myFile.txt");
+        file.createNewFile();
+
+        Path to = new File("/").toPath();
+
+        try {
+            PathUtils.copyFile(file.toPath(), to);
+            fail("Did not throw IOException but was unable to delete old file");
+        } catch (IOException e){
+            //OK since it should not be able to delete the file from to path
+        }
+    }
+
+    public void testCopyFileCryptoException() throws IOException {
+        Path storageLocation = Paths.get("build/test/vault");
+        Files.createDirectories(storageLocation);
+        CryptoFileSystemProvider.initialize(storageLocation, "masterkey.cryptomator", "password");
+
+        FileSystem fileSystem = CryptoFileSystemProvider.newFileSystem(
+                storageLocation,
+                CryptoFileSystemProperties.cryptoFileSystemProperties()
+                        .withPassphrase("password")
+                        .build());
+
+        File copyFrom = new File("build/test/myFile.txt");
+        copyFrom.createNewFile();
+
+        Path copyTo = fileSystem.getPath("build/test/anotherFile.txt");
+        try {
+            PathUtils.copyFile(copyFrom.toPath(), copyTo.toAbsolutePath());
+            fail("Did not throw IOException but file did not exist");
+        } catch (IOException e) {
+            //OK
+        }
+
+    }
+
+    public void testGetNumberOfSiblingsException() {
+        Path base = new File("build/test/asdasdasd").toPath();
+        Filter<Path> pathFilter = new Filter<Path>() {
+            @Override
+            public boolean accept(Path entry) throws IOException {
+                return true;
+            }
+        };
+        //There is no such file, so siblings are 0
+        int numberOfSiblings = PathUtils.getNumberOfSiblings(base, pathFilter);
+        assertEquals(0, numberOfSiblings);
+    }
+
+    public void testCopyFromStreamToFileNull() throws IOException {
+        File file = new File("build/test/myFile.txt");
+        file.createNewFile();
+        try {
+            PathUtils.copyFromStreamToFile(null, file.toPath(), null, 0);
+            fail("Did not throw nullpointer but inputstream was null");
+        } catch (NullPointerException e){
+            //OK
+        }
+        InputStream inputStream = new FileInputStream(file);
+        try {
+            PathUtils.copyFromStreamToFile(inputStream, null, null, 0);
+            inputStream.close();
+            fail("Did not throw nullpointer but file to was null");
+        } catch (NullPointerException e){
+            //OK
+            inputStream.close();
+        }
+        inputStream.close();
+    }
+
+    public void testRawCopyIOExceptions() throws IOException {
+        File file = new File("build/test/firstfile.txt");
+        file.createNewFile();
+        Path pathFrom = file.toPath();
+
+        File fileTo = new File("build/test/asdasda/zxczxczxc/secondfile.txt");
+        Path pathTo = fileTo.toPath();
+        try {
+            PathUtils.rawCopy(pathFrom, pathTo);
+            fail("Did not throw IOException but pathTo did not exist");
+        } catch (IOException e) {
+            //OK since fileTo did not exist
+        }
 
 
+        File directories = new File("build/test/asdasda/zxczxczxc");
+        directories.mkdirs();
+        fileTo.createNewFile();
+        InputStream inputStream = new FileInputStream(file);
+        OutputStream outputStream = new FileOutputStream(fileTo);
+        inputStream.close();
+        outputStream.close();
+        try {
+            PathUtils.rawCopy(inputStream, outputStream);
+            fail("Did not throw IOException but stream was closed");
+        } catch (IOException e){
+            //OK
+        }
+
+    }
+
+    public void testRecurrsiveMirrorUnsupported() throws IOException {
+        File file = new File("build/test/myFile.txt");
+        file.createNewFile();
+        File directory = new File("build/test/myDirectory");
+        directory.mkdir();
+
+        try {
+            PathUtils.recursiveMirror(file.toPath(), directory.toPath(), new Filter<Path>() {
+                @Override
+                public boolean accept(Path entry) throws IOException {
+                    return true;
+                }
+            });
+            fail("Did not throw UnsupportedOperationException for file-directory case");
+        } catch (UnsupportedOperationException e){
+            //OK
+        }
+
+
+        try {
+            PathUtils.recursiveMirror(directory.toPath(), file.toPath(), new Filter<Path>() {
+                @Override
+                public boolean accept(Path entry) throws IOException {
+                    return true;
+                }
+            });
+            fail("Did not throw UnsupportedOperationException for direcotyr-file case");
+        } catch (UnsupportedOperationException e){
+            //OK
+        }
+    }
+
+    public void testZipFileIllegal() throws IOException {
+        File directory = new File("build/test/myDir");
+        directory.mkdir();
+
+        File toZip = new File("build/test/someFile.txt");
+        toZip.createNewFile();
+
+        try {
+            PathUtils.zipFile(directory.toPath(), toZip.toPath());
+            fail("Did not throw IllegalArgumentException. First argument was a directory and not a file");
+        } catch (IllegalArgumentException e) {
+            //OK
+        }
+    }
+
+    public void testRecursiveMoveCopyFallbackVisitor() throws IOException {
+        File firstDirectory = new File("build/test/first");
+        File secondDirectory = new File("build/test/second");
+
+        try {
+            PathUtils.recursiveMoveCopyFallbackVisitor(firstDirectory.toPath(), secondDirectory.toPath());
+            fail("NoSuchFileException not thrown but from directory did not exist");
+        } catch (NoSuchFileException e){
+            //OK
+        }
+    }
+
+
+    public void testRecursiveDeleteVisitorException() {
+        try {
+            PathUtils.recursiveDeleteVisitor(Paths.get("build/test/asdads"));
+            fail("IOException not thrown but file did not exist");
+        } catch (IOException e) {
+            //OK since it does not exist
+        }
+    }
+
+    public void testRecursiveMoveDirectoryException() {
+        try {
+            PathUtils.recursiveMoveVisitor(Paths.get("/asdasdad"), Paths.get("sqweqeqweq"));
+            fail("IOException not thrown but paths did not exist");
+        } catch (IOException e) {
+            //OK
+        }
+    }
+
+    public void testRecursiveCopyVisitorException() {
+        try {
+            PathUtils.recursiveCopyVisitor(Paths.get("/asdasdad"), Paths.get("sqweqeqweq"));
+            fail("IOException not thrown but paths did not exist");
+        } catch (IOException e) {
+            //OK
+        }
     }
 }
