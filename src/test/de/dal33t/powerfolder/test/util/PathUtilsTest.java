@@ -1577,16 +1577,14 @@ public class PathUtilsTest extends TestCase {
         Path returnedPath = PathUtils.removeInvalidFilenameChars(path);
         assertEquals(path, returnedPath);
 
-        file = new File("build/test/stars***Stars.csv   ");
-        path = file.toPath();
-        returnedPath = PathUtils.removeInvalidFilenameChars(path);
-        assertEquals("starsStars.csv",returnedPath.getFileName().toString());
+        file = new File("myFile\\Yes.txt");
+        returnedPath = PathUtils.removeInvalidFilenameChars(file.toPath());
+        assertEquals("Yes.txt",returnedPath.getFileName().toString());
 
+        file = new File("myFile/Yes.txt");
+        returnedPath = PathUtils.removeInvalidFilenameChars(file.toPath());
+        assertEquals("Yes.txt",returnedPath.getFileName().toString());
 
-        file = new File("myFile?Yes");
-        path = file.toPath();
-        returnedPath = PathUtils.removeInvalidFilenameChars(path);
-        assertEquals("myFileYes",returnedPath.getFileName().toString());
     }
 
     public void testRawCopyNullInputStreamTest() throws IOException {
@@ -2165,24 +2163,24 @@ public class PathUtilsTest extends TestCase {
         assertTrue(createdDir.isDirectory());
     }
 
-    public void testCopyFileException() throws IOException {
-        File file = new File("build/test/myFile.txt");
-        file.createNewFile();
-
-        Path to = new File("/").toPath();
-
-        try {
-            PathUtils.copyFile(file.toPath(), to);
-            fail("Did not throw IOException but was unable to delete old file");
-        } catch (IOException e){
-            //OK since it should not be able to delete the file from to path
-        }
-    }
+//    public void testCopyFileException() throws IOException {
+//        File file = new File("build/test/myFile.txt");
+//        file.createNewFile();
+//
+//        Path to = new File("").toPath();
+//
+//        try {
+//            PathUtils.copyFile(file.toPath(), to);
+//            fail("Did not throw IOException but was unable to delete old file");
+//        } catch (IOException e){
+//            //OK since it should not be able to delete the file from to path
+//        }
+//    }
 
     public void testCopyFileCryptoException() throws IOException {
         Path storageLocation = Paths.get("build/test/vault");
         Files.createDirectories(storageLocation);
-        CryptoFileSystemProvider.initialize(storageLocation, "masterkey.cryptomator", "password");
+        CryptoFileSystemProvider.initialize(storageLocation, "masterkey.cryptomator", "passwordA1!asdasdasdasdasdasd");
 
         FileSystem fileSystem = CryptoFileSystemProvider.newFileSystem(
                 storageLocation,
@@ -2354,4 +2352,52 @@ public class PathUtilsTest extends TestCase {
             //OK
         }
     }
+
+    public void testCreateEmptyDirException() {
+        File file = new File("/");
+        try {
+            PathUtils.createEmptyDirectory(file.toPath());
+            fail("NullPointer was not thrown when directory does not have a name");
+        } catch (NullPointerException e){
+
+        }
+    }
+
+    public void testCopyFromStreamToFileExceptions() throws IOException {
+        File file = new File("build/test/asdasdasd/qwerqwerqwerasd");
+        Path toPath = file.toPath();
+        File fileFrom = new File("build/test/myFile.txt");
+        fileFrom.createNewFile();
+        FileInputStream fileInputStream = new FileInputStream(fileFrom);
+        fileInputStream.close();
+        try {
+            PathUtils.copyFromStreamToFile(fileInputStream, toPath, null, 0);
+            fail("Did not throw exception when stream was empty");
+        } catch (IOException e){
+
+        }
+    }
+
+    public void testRecursiveCopyUnsupported() throws IOException {
+        File directory = new File("build/test/myDir");
+        directory.mkdir();
+
+        File file = new File("build/test/myFile.txt");
+        file.createNewFile();
+
+        try {
+            PathUtils.recursiveCopy(directory.toPath(), file.toPath());
+            fail("Did not throw UnsupportedOperationException when copying from directory to file");
+        } catch (UnsupportedOperationException e){
+
+        }
+
+        try {
+            PathUtils.recursiveCopy(file.toPath(), directory.toPath());
+            fail("Did not throw UnsupportedOperationException when copying from directory to file");
+        } catch (UnsupportedOperationException e){
+
+        }
+    }
+
 }
