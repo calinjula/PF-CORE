@@ -2180,7 +2180,7 @@ public class PathUtilsTest extends TestCase {
     public void testCopyFileCryptoException() throws IOException {
         Path storageLocation = Paths.get("build/test/vault");
         Files.createDirectories(storageLocation);
-        CryptoFileSystemProvider.initialize(storageLocation, "masterkey.cryptomator", "passwordA1!asdasdasdasdasdasd");
+        CryptoFileSystemProvider.initialize(storageLocation, "masterkey.cryptomator", "password");
 
         FileSystem fileSystem = CryptoFileSystemProvider.newFileSystem(
                 storageLocation,
@@ -2398,6 +2398,98 @@ public class PathUtilsTest extends TestCase {
         } catch (UnsupportedOperationException e){
 
         }
+    }
+
+    public void testCopyFromStreamToFileDeleteException() throws IOException {
+        File from = new File("build/test/fileOne");
+        from.createNewFile();
+        FileInputStream fileInputStream = new FileInputStream(from);
+
+        File toDir = new File("build/test/toDir");
+        toDir.mkdir();
+        File toFileExisting = new File("build/test/toDir/fileTwo");
+        toFileExisting.createNewFile();
+        toDir.setReadOnly();
+        try {
+            PathUtils.copyFromStreamToFile(fileInputStream, toFileExisting.toPath(), null, 0);
+            toDir.setWritable(true);
+            fail("Should have thrown IOException because file to copy to was in read only directory");
+        } catch (IOException e){
+            //OK
+        }
+
+        File toFileNotExisting = new File("build/test/toDir/fileThree");
+        try {
+            PathUtils.copyFromStreamToFile(fileInputStream, toFileNotExisting.toPath(), null, 0);
+            toDir.setWritable(true);
+            fail("Should have thrown IOException because file to copy to was in read only directory");
+        } catch (IOException e){
+            //OK
+        }
+
+        toDir.setWritable(true);
+    }
+
+    public void testRecursiveDeleteException() throws IOException {
+        File directoryRo = new File("build/test/directoryOne");
+        directoryRo.mkdir();
+
+        File newFile = new File("build/test/directoryOne/fileOne.txt");
+        newFile.createNewFile();
+
+        directoryRo.setReadOnly();
+        try {
+            PathUtils.recursiveDelete(directoryRo.toPath());
+            directoryRo.setWritable(true);
+            fail("Did not throw IOException when directory was readonly");
+        } catch (IOException e){
+            //OK
+        }
+        directoryRo.setWritable(true);
+    }
+
+    public void testRecursiveMirrorException() throws IOException {
+        File sourceDir = new File("build/test/sourceDir");
+        sourceDir.mkdir();
+
+        File targetDir = new File("build/test/targetDir");
+        targetDir.mkdir();
+
+        File fileInTargetDir = new File("build/test/targetDir/file.txt");
+        fileInTargetDir.createNewFile();
+
+        targetDir.setReadOnly();
+
+        try {
+            PathUtils.recursiveMirror(sourceDir.toPath(), targetDir.toPath());
+            targetDir.setWritable(true);
+            fail("Should have thrown IO, target is RO and it should not be able to delete file from target");
+        } catch (IOException e){
+            //OK
+        }
+
+        targetDir.setWritable(true);
+    }
+
+    public void testHasFilesException() throws IOException {
+        File sourceDir = new File("build/test/sourceDir");
+        sourceDir.mkdir();
+
+        File inside = new File("build/test/sourceDir/inside.txt");
+        inside.createNewFile();
+
+        sourceDir.setReadable(false);
+        sourceDir.setWritable(false);
+
+        if (PathUtils.hasFiles(sourceDir.toPath())){
+            sourceDir.setReadable(true);
+            sourceDir.setWritable(true);
+            fail("Should have been false since directory is not readable");
+        } else {
+            sourceDir.setReadable(true);
+            sourceDir.setWritable(true);
+        }
+
     }
 
 }
